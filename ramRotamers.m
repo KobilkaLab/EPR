@@ -4,8 +4,9 @@
 % 
 %
 % MAGIC NUMBERS (you need to change these):
-% conditionIndexActive, conditionIndexInactive,
-% resultsNumber, results(resultsNumber).conditionName='', thresholdCW, thresholdDEER
+% (raw data manual input), conditionIndexActive, conditionIndexInactive, conditionIndexNb
+% results(resultsNumber).conditionName='', thresholdCW,
+% thresholdDEER, thresholdNb, aminoAcid
 %% populate the label type name field
 rotamers.labelNames={'B2activeMTSLcryo','B2activeMTSLambient','B2activeProxylcryo',...
     'B2activeProxylambient','B2inactiveMTSLcryo','B2inactiveMTSLambient',...
@@ -6852,6 +6853,7 @@ end
 %% Determine difference between Active and Inactive in # of rotamers
 conditionIndexActive=1;
 conditionIndexInactive=5;
+conditionIndexNb=9;
 resultsNumber=conditionIndexActive;
 results(resultsNumber).conditionName='Active minus Inactive, cryo, MTSSL';
 for i=1:residueMax
@@ -6868,15 +6870,15 @@ for i=1:residueMax
 end
 % only analyze up to the minVector size so that matrix dimensions agree
 % subtract and store in results().rotamers
-minVectorSize=min((size(rotamers(conditionIndexActive).sortedActive,2)),(size(rotamers(conditionIndexInactive).sortedInactive,2)));
+minVectorSize=min(resMax);
 for i=1:minVectorSize
     results(resultsNumber).rotamers(i)=(rotamers(conditionIndexActive).sortedActive(i))-(rotamers(conditionIndexInactive).sortedInactive(i));
 end
 % re-run this section as needed, inputting different condition indices and
 % results numbers for storing results.
 %% Thresholding for cw and DEER
-thresholdCW=50; % a change in the number of rotamers must be greater than this number
-thresholdDEER=30; % a change in the number of rotamers must be less than this number to avoid skewing distance distributions
+thresholdCW=30; % a change in the number of rotamers must be greater than this number
+thresholdDEER=200; % a change in the number of rotamers must be less than this number to avoid skewing distance distributions
 results(resultsNumber).cw=[]; 
 results(resultsNumber).DEER=[];% clear the previous round of stored results
 for i=1:minVectorSize
@@ -6895,70 +6897,168 @@ for i=1:minVectorSize
 end
 %% print results
 clear('cwList'); %clear the previous round of stored results.
-results.cwList(:,1)=results(resultsNumber).cw((results(resultsNumber).cw(:,1)~=0),1);
-results.cwList(:,2)=results(resultsNumber).cw(results.cwList(:,1),2);
+cwList(:,1)=results(resultsNumber).cw((results(resultsNumber).cw(:,1)~=0),1);
+cwList(:,2)=results(resultsNumber).cw(cwList(:,1),2);
 sprintf('CW positions above threshold %d',thresholdCW)
-results.cwList
+cwList
 clear('DEERList') %clear the previous round of stored results.
-results.DEERList(:,1)=results(resultsNumber).DEER((results(resultsNumber).DEER(:,1)~=0),1);
-results.DEERList(:,2)=results(resultsNumber).DEER(results.DEERList(:,1),2);
+DEERList(:,1)=results(resultsNumber).DEER((results(resultsNumber).DEER(:,1)~=0),1);
+DEERList(:,2)=results(resultsNumber).DEER(DEERList(:,1),2);
 sprintf('DEER positions below threshold %d',thresholdDEER)
-results.DEERList
+DEERList
 %% plot results
-bar(results(resultsNumber).cwList(:,1),results(resultsNumber).cwList(:,2),'k')
+figure(1)
+xlim([1 350]);
+bar(cwList(:,1),cwList(:,2),'k')
 xlabel('residue number');
 ylabel('delta rotamers');
 title(results(resultsNumber).conditionName)
 figure(2)
-bar(results(resultsNumber).DEERList(:,1),results(resultsNumber).DEERList(:,2),'k')
+xlim([1 350]);
+bar(DEERList(:,1),DEERList(:,2),'k')
 xlabel('residue number');
 ylabel('delta rotamers');
 title(results(resultsNumber).conditionName)
 %% Determine difference between Active and Nb-bound, and/or Inactive and Nb-bound in # rotamers
 % adjust the CW and DEER results, throwing out positions that are
 % significantly influence by nanobody.
-conditionIndexNb=9;
 resultsNumber=conditionIndexNb; % store difference between active and nanobody structures in results(2)
-results(resultsNumber).Nb=[];
-results(resultsNumber).cw=[];
-results(resultsNumber).DEER=[];
-for i=1:residueMax
+for i=1:min(resMax)
     if isfinite(find(rotamers(conditionIndexNb).residue==i))==1; %don't look for residue positions that aren't in the results file
         rotamers(conditionIndexNb).index(i)=(find(rotamers(conditionIndexNb).residue==i));
         rotamers(conditionIndexNb).sortedNb(i)=rotamers(conditionIndexNb).number(rotamers(conditionIndexNb).index(i));
     end
 end
-minVectorSize=min((size(rotamers(conditionIndexActive).sortedActive,2)),(size(rotamers(conditionIndexNb).sortedNb,2)));
+minVectorSize=min(resMax);
 for i=1:minVectorSize
     results(resultsNumber).rotamers(i)=(rotamers(conditionIndexNb).sortedNb(i))-(rotamers(conditionIndexActive).sortedActive(i));
 end
-% thresholding Active results by delta nanobody, store in results #2
+% thresholding Active results by delta nanobody, store in results 
+% Nanobody results index
 thresholdNb=20;
-for i=1:minVectorSize
+minVectorCW=min(size(rotamers(conditionIndexNb).sortedNb,2),size(results(conditionIndexActive).cw,1)); % if numbers deleted off the end, only loop up to the end of the results
+minVectorDEER=min(size(rotamers(conditionIndexNb).sortedNb,2),size(results(conditionIndexActive).DEER,1)); % only loop up to end of results to avoid exceeding matrix size
+for i=1:minVectorCW
     if abs(results(resultsNumber).rotamers(i)) < thresholdNb
     results(resultsNumber).Nb(i,1)=i;
     results(resultsNumber).Nb(i,2)=results(resultsNumber).rotamers(i); % column 2 is the number of Nb rotamers - Active rotamers, thresholded
-    %results(resultsNumber).cw(i,1)=i;
-    %results(resultsNumber).cw(i,2)=results(1).cw(i,2);
-    % store Nb-thresholded cw results in result #2
+    results(resultsNumber).cw(i,1)=i;
+    results(resultsNumber).cw(i,2)=results(conditionIndexActive).cw(i,2);
+    end
+end
+    for i=1:minVectorDEER
+        if abs(results(resultsNumber).rotamers(i)) < thresholdNb
+    results(resultsNumber).Nb(i,1)=i;
+    results(resultsNumber).Nb(i,2)=results(resultsNumber).rotamers(i);
     results(resultsNumber).DEER(i,1)=i;
-    results(resultsNumber).DEER(i,2)=results(1).DEER(i,2);
+    results(resultsNumber).DEER(i,2)=results(conditionIndexActive).DEER(i,2);
     end
 end
 %% print thresholded list
-%clear('cwListNb'); %clear the previous round of stored results.
-%cwListNb(:,1)=results(resultsNumber).cw((results(resultsNumber).cw(:,2)~=0),1);
-%cwListNb(:,2)=results(resultsNumber).cw(cwListNb(:,1),2);
-%sprintf('CW positions above threshold %d with Nb threshold %d',thresholdCW,thresholdNb)
-% cwListNb
+clear('cwListNb'); %clear the previous round of stored results.
+cwListNb(:,1)=results(resultsNumber).cw((results(resultsNumber).cw(:,2)~=0),1);
+cwListNb(:,2)=results(resultsNumber).cw(cwListNb(:,1),2);
+sprintf('CW positions above threshold %d with Nb threshold %d',thresholdCW,thresholdNb)
+cwListNb
 clear('DEERListNb'); %clear the previous round of stored results.
 DEERListNb(:,1)=results(resultsNumber).DEER((results(resultsNumber).DEER(:,2)~=0),1);
 DEERListNb(:,2)=results(resultsNumber).DEER(DEERListNb(:,1),2);
 sprintf('DEER positions below threshold %d with Nb threshold %d',thresholdDEER,thresholdNb)
 DEERListNb
 %% refine sites by positions that should be easy to label
-% using results from AJ's code for distances between carbons between two
+%% refine using results from AJ's code for distances between carbons between two
 % structures
+% first, manually import data
+distances.residues=[57
+58
+59
+60
+66
+67
+68
+69
+134
+135
+136
+137
+146
+147
+148
+149
+226
+227
+228
+229
+230
+329
+328
+327
+331];
+distances.ca=[12.5163491
+13.54771902
+13.73809176
+14.04904226
+14.80195717
+14.26628318
+12.95615817
+12.1654955
+9.418363346
+8.748246603
+7.756508393
+9.649582754
+13.00963834
+14.01196019
+13.17046075
+11.23722772
+4.145283007
+1.642715908
+2.298508049
+4.398834578
+1.930152136
+11.9079286
+9.799991255
+9.306981674
+13.94181882];
+distances.cb=[11.95133997
+13.71876624
+13.63851059
+13.9088566
+15.70996155
+15.93908839
+14.25998355
+13.46913446
+11.56624556
+10.46659278
+9.977911931
+13.38237588
+14.81440556
+16.00309577
+14.85125231
+12.93582194
+6.37486658
+3.087142593
+5.042959478
+8.041183127
+2.806407139
+12.12186779
+8.310031464
+8.984565377
+14.78082213];
+%% Distance thresholding
+thresholdDist=10;
+for i=1:size(distances.ca,1)
+   if find(DEERListNb==distances.residues(i))
+      results(resultsNumber).distanceca(:,1)=distances.residues(distances.ca>thresholdDist) % threshold ca, first column is position
+       results(resultsNumber).distanceca(:,2)=distances.ca(distances.ca>thresholdDist) % threshold ca, second column is distance
+       results(resultsNumber).distancecb(:,1)=distances.residues(distances.cb>thresholdDist) % same with cb
+      results(resultsNumber).distancecb(:,2)=distances.cb(distances.cb>thresholdDist)
+   end
+end
+% plot distances
+figure(5)
+bar(results(resultsNumber).distanceca(:,1),results(resultsNumber).distanceca(:,2))
+figure(6)
+bar(results(resultsNumber).distancecb(:,1),results(resultsNumber).distancecb(:,2))
 %% find the data for a single position
 aminoAcid=333;
 sprintf('Amino Acid # %d',aminoAcid)
@@ -6970,3 +7070,36 @@ sprintf('Inactive rotamers: %d', rotamers(conditionIndexInactive).sortedInactive
 sprintf('Active-Nb rotamers: %d',rotamers(conditionIndexNb).sortedNb(aminoAcid))
 sprintf('Active-Inactive delta: %d', results(conditionIndexActive).rotamers(aminoAcid))
 sprintf('Active-Nanobody delta: %d', results(conditionIndexNb).rotamers(aminoAcid))
+%% plot Nb-filtered results
+figure(3)
+xlim([1 350]);
+bar(cwListNb(:,1),cwListNb(:,2),'k')
+xlabel('residue number');
+ylabel('delta rotamers');
+title(results(resultsNumber).conditionName)
+xlim([1 350]);
+figure(4)
+subplot(2,1,1)
+xlim([1 350]);
+bar(DEERListNb(:,1),DEERListNb(:,2),'k')
+ylabel('delta rotamers');
+subplot(2,1,2)
+xlim([1 350]);
+bar(results(resultsNumber).distanceca(:,1),results(resultsNumber).distanceca(:,2))
+xlabel('residue number');
+ylabel('distance threshold')
+title(results(resultsNumber).conditionName)
+%% overlay plot with distances
+
+%% print table output
+ConditionNames={'AA 327 MTSL cryo', 'MTSL ambient', 'Proxyl cryo', 'Proxyl ambient'};
+    aminoAcid=327
+    for i=1:4
+        ActiveRotamers(i,1)=rotamers(i).sortedActive(aminoAcid);
+        InactiveRotamers(i,1)=rotamers(i+4).sortedInactive(aminoAcid);
+        NanobodyRotamers(i,1)=rotamers(i+8).sortedNb(aminoAcid);
+    end
+ActiveInactiveDelta=ActiveRotamers-InactiveRotamers;
+ActiveNanobodyDelta=ActiveRotamers-NanobodyRotamers;
+outputTable=table(ActiveRotamers, InactiveRotamers, NanobodyRotamers,ActiveInactiveDelta,ActiveNanobodyDelta,'RowNames',ConditionNames)
+%
